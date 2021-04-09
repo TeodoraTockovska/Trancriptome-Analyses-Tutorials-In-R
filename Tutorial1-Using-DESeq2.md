@@ -1,12 +1,9 @@
----
 title: "Step-by-step Guide to Perform Differential Expression Analysis using DESeq2"
 author: "Teodora Tockovska"
 date: "April 9, 2021"
 output: pdf_document
 geometry: margin=1in
 linkcolor: blue
-# fontsize: 11pt
----
 
 This tutorial is the first document out of 3 that will go into detail about performing transcriptome analyses using real data. Within this tutorial, you will be introduced to the R library `DESeq2`, which is a method for differential analysis of genes by using count data. Love et al. (2014) describe that the analysis of count data from RNA-seq is a fundamental task to understand the systematic changes across experimental conditions.  
 
@@ -43,17 +40,10 @@ library("vsn")
 # library("hexbin")
 ```
 
-```{r,echo=FALSE,message=FALSE,warning=FALSE}
-# Set so that long lines in R will be wrapped:
-# knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
-```
-
 The next step is to load in the datasets. The duck sample information is loaded and saved into the variable `duck_samples`. Likewise, the duck gene count data is loaded and saved into a variable called `duck_counts`. The function `read.csv()` is used to read in the CSV files and saved as dataframes. The file is separated by commas (,) which is selected as an argument in the function to separate the data into columns.
 ```{r}
-duck_samples <- read.csv("../EDA_StringTie_RNAseq/sample_metadata_Duck_5Apr2021.csv", 
-                         sep = ",")
-duck_counts <- read.csv("../EDA_StringTie_RNAseq/sample_count_data_Duck_5Apr2021.csv", 
-                        sep = ",")
+duck_samples <- read.csv("../EDA_StringTie_RNAseq/sample_metadata_Duck_5Apr2021.csv", sep = ",")
+duck_counts <- read.csv("../EDA_StringTie_RNAseq/sample_count_data_Duck_5Apr2021.csv", sep = ",")
 ```
 
 To understand the data, print the duck_samples dataframe. There are 3 columns with titles "Sample", "Treatment", and "Time". There are 8 control duck samples which are labeled by "D8XX", where *XX* represent numbers. Similarly, there are 8 infected duck samples that are labeled by "D5XX". The sampling time periods are outlined in the "Time" column. For example, Duck D801 was a control duck which was sampled from week 12.
