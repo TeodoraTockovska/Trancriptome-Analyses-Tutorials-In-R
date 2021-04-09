@@ -1,9 +1,6 @@
-title: "Step-by-step Guide to Perform Differential Expression Analysis using DESeq2"
-author: "Teodora Tockovska"
-date: "April 9, 2021"
-output: pdf_document
-geometry: margin=1in
-linkcolor: blue
+# Step-by-step Guide to Perform Differential Expression Analysis using DESeq2
+## Teodora Tockovska
+## April 9, 2021
 
 This tutorial is the first document out of 3 that will go into detail about performing transcriptome analyses using real data. Within this tutorial, you will be introduced to the R library `DESeq2`, which is a method for differential analysis of genes by using count data. Love et al. (2014) describe that the analysis of count data from RNA-seq is a fundamental task to understand the systematic changes across experimental conditions.  
 
