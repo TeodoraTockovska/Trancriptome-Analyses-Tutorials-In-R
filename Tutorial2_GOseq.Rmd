@@ -1,0 +1,179 @@
+---
+title: "Gene Ontology Enrichment Analysis using GOseq"
+author: "Teodora Tockovska"
+date: "April 28, 2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+geometry: margin=1in
+linkcolor: blue
+---
+
+In the previous detailed tutorial, I created a couple of files for the duck samples at time points weeks 4 and 12. As outlined in the previous tutorial, the next step is to proceed with the gene ontology enrichment analysis to discover what processes the genes are part of and what their roles are in the ducks. I used the R package `GOseq` to do this analysis. In this tutorial, you will learn how to use GOseq using Biomart, a database from Ensembl. I have used several resources to develop the script. I have provided the resources which can be found within the tutorial.
+
+**Note** *To reduce on length of the tutorial and limit repetitive code, this tutorial only uses the duck week 12 dataset from tutorial #1.*
+
+## Table of Contents
+* [Loading Libraries and Data Processing](#loading-libraries-and-data-processing)
+
+* [Biomart and GOseq for Gene Ontology Enrichment Analysis](#biomart-and-goseq-for-gene-ontology-enrichment-analysis)
+
+* [Saving Data and Next Steps](#saving-data-and-next-steps)
+
+\newpage
+
+# Loading Libraries and Data Processing
+
+In this section, we will be loading the libraries and importing the data. To start, import the following libraries. 
+```{r, echo=T, results='hide', message=F, warning=F}
+library("goseq")
+library("GenomicFeatures")
+library("biomaRt")
+library("ensembldb")
+library("GO.db")
+library("tidyverse")
+```
+
+Next, read the DESeq2 results data file that was created in tutorial #1 ("signDEgenes_DW4.csv"). As mentioned, this file contains the duck week 12 differentially expressed (DE) genes. I save the file in a variable called "res_dw4_shrinkage_file" because it contains all of the DE genes and it was because I shrunk the log2 fold changes using the function `lfcshrink()` in the previous tutorial. Additionally, I saved the vector of all the gene names in a variable called "all_dw12_genes". 
+```{r}
+res_dw12_shrinkage_file <- read.table(file = "signDEgenes_DW12.csv", row.names = 1, sep = ",", header = T)
+all_dw12_genes <- res_dw12_shrinkage_file$gene_names
+head(all_dw12_genes)
+```
+
+There are 175 genes and 7 columns.
+```{r}
+dim(res_dw12_shrinkage_file)
+```
+
+Next, I select all significant genes with absolute Log2 fold change > 2 (|LFC|>2) and adjusted p-values (padj) < 0.05. I saved the dataframe in a variable called "DE_dw12_genes".
+```{r}
+DE_dw12_genes <- res_dw12_shrinkage_file %>% 
+  data.frame() %>% 
+  group_by(padj) %>% 
+  slice_min(order_by=padj) %>% 
+  dplyr::filter(padj<0.05, abs(log2FoldChange)>2)
+```
+
+I look at the updated dataframe. There are 7 columns and 62 significant DE genes that have more than 4 folds of change in their expression.
+```{r}
+head(DE_dw12_genes)
+dim(DE_dw12_genes)
+```
+
+To find which genes have large fold changes, a count matrix is one method. Create a count matrix which tags DE genes with large fold changes as 1 and and genes with low fold changes with 0. First, find all the DE genes with large fold changes in the dataframe. The function `as.integer()` converts boolean `TRUE` to 1 and `FALSE` to 0. Then, set the names of the vector object to the gene name variable (`all_dw12_genes`). You can see the top 5 genes have the value "1" which means that these DE genes have large fold changes.
+```{r}
+genes_duckW12_vector <- as.integer(all_dw12_genes %in% DE_dw12_genes$gene_names)
+names(genes_duckW12_vector) <- all_dw12_genes
+head(genes_duckW12_vector)
+```
+
+I have 62 DE genes with large fold changes and 113 other DE genes with low fold changes.
+```{r}
+table(genes_duckW12_vector)
+```
+
+# Biomart and GOseq for Gene Ontology Enrichment Analysis
+
+Within this section, I used 2 documents as resources:
+
+1. GOseq vignette (http://www.bioconductor.org/packages/release/bioc/vignettes/goseq/inst/doc/goseq.pdf)
+
+2. Downstream	Analysis	of	Transcriptomic	Data: GOseq (http://bioinformatics-core-shared-training.github.io/cruk-bioinf-sschool/Day4/Day4_RNseq_DownstreamAnalysis.pdf)
+
+3. GOseq analysis with Non-native Organism (https://www.biostars.org/p/308979/)
+
+I use Biomart to create the database for the genes because the duck genome is a non-native organism. This means that the GOseq database does not contain the duck genome. I installed the duck genome from Ensembl which will be used to create the database.
+
+To begin, I used the biomart functions to select for the specific terms that I want to extract from the biomart database. First, within the funciton `useMart()`, the "biomart" argument is set to "ENSEMBL_MART_ENSEMBL" for the genes. I used the function `listMarts()` from the biomart library to select it and create a dataset. I set the host to the main website. The set-up for the duck Biomart database is crucial for conducting the GOSeq analysis for the data.
+```{r, message=F, warning=F}
+mart <- useMart(biomart="ENSEMBL_MART_ENSEMBL", host="www.ensembl.org")
+datasets <- listDatasets(mart)
+duck_mart <- subset(datasets, grepl("duck genes", description, ignore.case=TRUE))
+use_duck_mart <- useDataset(dataset=duck_mart$dataset, mart=mart)
+```
+
+As stated before, I installed the duck genome from Ensembl's website. I used the release 101 GTF file because it is the most up-to-date information (at the time of conducting the analysis, around November 2020). The function `ensDbFromGtf()` generates the Ensembl annotation database from GTF files. It creates an SQLite database and using functions in R, I can access the database and retrieve annotations for genes.
+```{r, message=F, warning=F}
+dbFile <- ensDbFromGtf("Anas_platyrhynchos_platyrhynchos.CAU_duck1.0.101.gtf.gz")
+```
+
+For this section, I used code from this website: https://support.bioconductor.org/p/91569/, where Ensembl annotations are created. 
+```{r, message=F, warning=F}
+edb <- EnsDb(dbFile)
+seqinfo(edb)
+```
+
+The function `transcriptsBy()` retrieves the gene annotation data from the Ensembl duck database that was manually created using the GTF file. 
+```{r}
+txsByGene <- transcriptsBy(edb,"gene")
+```
+
+Once the database is created, I check which genes have matched. 966 genes matched, which is perfect and now I can proceed with the analysis. 
+```{r}
+length(which(names(genes_duckW12_vector) %in% names(txsByGene)))
+```
+
+Next, from the database, I extract the 966 gene names and their information.
+```{r, message=F, warning=F}
+indexed <- txsByGene[which(names(genes_duckW12_vector) %in% names(txsByGene))]
+head(indexed, 2)
+```
+
+Then, I calculate the lengths of each gene and save the lengths in a variable called "lengthData".
+```{r}
+lengthData <- median(width(indexed))
+head(lengthData)
+```
+
+Now that I have the lengths, I will be proceeding with step 3 in the vignette (calculating the PWF, pages 2-3) and section 6.5.1 (in GO Analysis, page 7-9). The purpose of the function `nullp()` is to fit the probability weighting function (PWF). As described in the vignette, each gene needs to be weighted depending on its length, which is why I calculated the gene lengths. For more information, please refer to the vignette. Also, a figure is returned by default but I set that to "F" (false) to not return a figure. 
+
+To help me with the code, I referred to this website: https://www.biostars.org/p/117797/.
+```{r, message=F, warning=F}
+pwf_dw12 <- nullp(genes_duckW12_vector, bias.data = lengthData, "ensGene", plot.fit = F)
+```
+
+Next, I produce a dataset of GO terms which would be used downstream, for the `goseq()` function. I retrieve the GO term information from the Biomart database by using the function `getBM()` from the `biomart` R package. Recall that I set up the biomart variable "use_duck_mart" above. Essentially, this code block shows a few things. 
+
+Firstly, the "filters" parameter refers to what I will use as input, which is set to Ensembl IDs. The "attributes" parameter refers to things that I want to get from the Biomart database. So, in this case, I want to retrieve the Ensembl IDs and the GO accession IDs. The values refer to the data that I use. In this case, I have a character (string) vector of all the Ensembl IDs that I pass as input. The database is set to "use_duck_mart", which I created above. 
+```{r}
+GOmap_dw12 <- getBM(filters = "ensembl_gene_id", 
+                   attributes = c("ensembl_gene_id", "go_id"), 
+                   values = names(genes_duckW12_vector), 
+                   mart = use_duck_mart)
+```
+
+As output, I have a dataframe of 2 columns and n rows, containing the Ensembl IDs and their GO accession numbers. Genes can have multiple GO accession numbers.
+```{r}
+head(GOmap_dw12)
+```
+
+Now that I have the dataframe containing the Ensembl IDs and the GO accession numbers, and the PWF object, I can commence with the GO enrichment analysis. I use the function `goseq()` which does selection-unbiased testing for category enrichment amongst DE genes. The function returns a dataframe with many columns. The statistical test that calculates p-values is set to "Wallenius" by default. The p-values must be corrected or adjusted.
+```{r, message=F, warning=F}
+GO_results_dw12 <- goseq(pwf_dw12, gene2cat = GOmap_dw12, "ensGene")
+head(GO_results_dw12)
+```
+
+Following the vignette (section 6.5.6, page 14), I correct the p-values using the Benjamini and Hochberg method. This is very important to do prior to interpretting results. Unfortunately, there are no significant GO terms. This is expected given that I worked with sampled duck data, as outlined in tutorial #1.
+```{r}
+nrow(GO_results_dw12[p.adjust(GO_results_dw12$over_represented_pvalue, method="BH")<0.05, ])
+```
+
+To correct the p-values, use this specific line of code.
+```{r, eval=F}
+GO_results_dw12$padj <- p.adjust(GO_results_dw12$over_represented_pvalue, method="BH")
+```
+
+# Saving Data and Next Steps
+
+For future analysis, such as exploring the GO terms, I can save the dataframes into CSV files. After testing different functions, I found that the `write_csv()` function from `tidyverse` R package retained the dataframes as they are currently. 
+```{r, eval=F}
+write_csv(GO_results_dw12, "GO_results_dw12.csv")
+write_csv(DE_dw12_genes, "DE_dw12_genes.csv")
+write_csv(GOmap_dw12, "GOmap_dw12.csv")
+```
+
+## Next Steps
+
+The proceeding steps is to explore the data, and figure out what the important GO terms are within the data. The goal of the final tutorial is to show you different methods to do this. Because the sample data did not have any significant GO terms, I cannot show you results, however, I will show you the typical things that you can explore. 
