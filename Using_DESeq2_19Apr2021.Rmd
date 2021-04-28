@@ -1,11 +1,13 @@
 ---
 title: "Step-by-step Guide to Perform Differential Expression Analysis using DESeq2"
 author: "Teodora Tockovska"
-date: "April 9, 2021"
-output: pdf_document
+date: "April 19, 2021"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
 geometry: margin=1in
 linkcolor: blue
-# fontsize: 11pt
 ---
 
 This tutorial is the first document out of 3 that will go into detail about performing transcriptome analyses using real data. Within this tutorial, you will be introduced to the R library `DESeq2`, which is a method for differential analysis of genes by using count data. Love et al. (2014) describe that the analysis of count data from RNA-seq is a fundamental task to understand the systematic changes across experimental conditions.  
@@ -17,16 +19,15 @@ Sample data was created by retaining 30% of the duck metadata for the purposes o
 ## Table of Contents
 * [Data Processing](#loading-libraries-importing-data-and-proceeding-with-data-processing)
     + Preparing data for `DESeq2`.
-* Differential Expression Analysis and Exploratory Data Analysis on Entire Datasets
-    + Learn the basics of `DESeq2` by performing differential expression analysis (DEA) and exploratory data analysis using the entire [duck](#analyses-on-the-entire-dataset) metadata.
+* [Differential Expression Analysis and Exploratory Data Analysis](#differential-expression-analysis-on-the-entire-dataset) on the Duck Dataset
+    + Learn the basics of `DESeq2` by performing differential expression analysis (DEA) and exploratory data analysis using the entire duck metadata.
     + Learn how to conduct DEA based on sampling times
     + Create visualizations using built-in functions to understand the data
 * Discover Differentially Expressed Genes for duck data split up into their respective sampling time points.
-    + [Week 4](#ducks-week-4-dea) Samples
-    + [Week 12](#ducks-week-12-dea) Samples
+    + [Week 4](#differentially-expression-analysis-ducks-week-4) Samples
+    + [Week 12](#differentially-expression-analysis-ducks-week-12) Samples
 * [Next Steps](#next-steps)
     + Explanation and breakdown of next steps after finding DEGs in samples
-* [References](#references)
 
 \newpage
 
@@ -40,7 +41,6 @@ library("DESeq2")
 library("tidyverse")
 library("RColorBrewer")
 library("vsn")
-# library("hexbin")
 ```
 
 ```{r,echo=FALSE,message=FALSE,warning=FALSE}
@@ -48,12 +48,13 @@ library("vsn")
 # knitr::opts_chunk$set(tidy.opts=list(width.cutoff=80), tidy=TRUE)
 ```
 
-The next step is to load in the datasets. The duck sample information is loaded and saved into the variable `duck_samples`. Likewise, the duck gene count data is loaded and saved into a variable called `duck_counts`. The function `read.csv()` is used to read in the CSV files and saved as dataframes. The file is separated by commas (,) which is selected as an argument in the function to separate the data into columns.
+The next step is to load in the datasets. The duck sample information is loaded and saved into the variable `duck_samples`. Likewise, the duck gene count data is loaded and saved into a variable called `duck_counts`. The function `read.csv()` is used to read in the CSV files and saved as dataframes. The file is separated by commas (,) which is selected as an argument in the function to separate the data into columns. I also saved the first 2 columns (the genes) in a variable called "genes".
 ```{r}
 duck_samples <- read.csv("../EDA_StringTie_RNAseq/sample_metadata_Duck_5Apr2021.csv", 
                          sep = ",")
 duck_counts <- read.csv("../EDA_StringTie_RNAseq/sample_count_data_Duck_5Apr2021.csv", 
                         sep = ",")
+genes <- duck_counts[1:2]
 ```
 
 To understand the data, print the duck_samples dataframe. There are 3 columns with titles "Sample", "Treatment", and "Time". There are 8 control duck samples which are labeled by "D8XX", where *XX* represent numbers. Similarly, there are 8 infected duck samples that are labeled by "D5XX". The sampling time periods are outlined in the "Time" column. For example, Duck D801 was a control duck which was sampled from week 12.
@@ -92,7 +93,7 @@ Once the dataframes have been modified, check that all sample IDs in the duck sa
 all(rownames(duck_samples) %in% colnames(duck_counts))
 ```
 
-The following statement allows us to rearrange the order of the duck samples in our count matrix to match the row sample IDs in our dataframe. This is important because it is required that the dataframe must have the columns of the count matrix in the same order. It will be further explained in the [differential expression analysis](#differential-expression-analysis-dea) section. Check that the orders are correct. 
+The following statement allows us to rearrange the order of the duck samples in our count matrix to match the row sample IDs in our dataframe. This is important because it is required that the dataframe must have the columns of the count matrix in the same order. It will be further explained in the [differential expression analysis](##differential-expression-analysis-on-the-entire-dataset) section. Check that the orders are correct. 
 ```{r}
 duck_counts <- duck_counts[, rownames(duck_samples)]
 all(rownames(duck_samples) == colnames(duck_counts))
@@ -124,11 +125,9 @@ duck_samples[1:8,]
 
 The data is now prepared! 
 
-# Analyses on the Entire Duck Dataset
+# Differential Expression Analysis on the Entire Duck Dataset
 
-The data has been prepared according to the `DESeq2` manual **Add reference to the link below!** and we can now proceed with the differential expression analysis. 
-
-### Differential Expression Analysis (DEA)
+The data has been prepared according to the `DESeq2` manual which can be found below in [Next Steps](#next-steps) and we can now proceed with the differential expression analysis. 
 
 I will be showing you the general steps to perform DEA. First, we will be designing the models which means setting the parameters prior to conducting the `DESeq2` functions to predict which genes could be differentially expressed. To begin, recognize the data types that you are working with because that will dictate how the data can be used. Recall the type of data that we have: gene count data and sample information data. 
 
@@ -169,28 +168,198 @@ res[1:4,]
 colnames(res)
 ```
 
-In the preceeding section, I will show you some methods to explore the results and understand what the data is showing you. 
+In the following section, I will show you some methods to explore the results and understand what the data is presenting.
 
-### Exploratory Data Analysis (EDA)
+### Visualizing Results
 
-```{r, eval = F}
-vsd <- vst(dds_all_samples, blind=FALSE)
+After generating the results, the next step is understanding the data by creating figures. The count data contains some genes that are zero and non-zero values. Recall that in  the gene *CLIPS* for duck D501 had 585 gene counts (shown above). Another gene that duck D501 has could have < 10 counts. These values need to be converted or transformed such that they are meaningful and visualizations can be created to analyze results. 
+
+The function `vst()` is used to calculate a variance stabilizing transformation (VST) on the DDS object. It transforms the DDS object and yeilds a matrix of values that have constant variance along the range of mean values. The transformation done here is important for dimension reduction methods such as performing PCA. The transformed data is on the log2 scale for large counts. The function `vst()` has a fast run time with respect to another transforming method by using the functon `rlog()`. I chose to set the"blind" parameter to FALSE in order to cut the running time of the function.
+```{r}
+vsd <- vst(dds, blind=FALSE)
 ```
 
-empty
+Using the transformed data, I can create a principal component analysis (PCA) plot. A PCA plot is a machine learning method that allows you to visualize large datasets that have several "dimensions". PCA plots are great tools for conducting exploratory data analysis and help you better understand the data. Using PCA plots in RNAseq analysis helps you see whether samples cluster based on their gene expressions. 
 
-# Ducks Week 4 DEA
+I use the function `plotPCA()` from `Deseq2`. The function uses `ggplot2` library which is how I can customize the figure. I passed the "vsd" transformed data which is required to create the PCA plot. I want to group the samples based on the "Treatment" and "Time", so I set the "intgroup" parameter to the vector containing "Treatment" and "Time". I also add a title, labels to the dots, and changed the dot colours.
+```{r}
+PCA_plot_dA <- plotPCA(vsd, intgroup=c("Treatment", "Time")) + 
+  geom_text(aes(label=name), hjust= 0, size = 3, nudge_x = 1.25) + 
+  scale_color_brewer(palette="BrBG") +
+  ggtitle("Duck Clusters Based on Treatment and Time (Weeks)") + 
+  labs(color = "Treatment:Time (Weeks)") + 
+  expand_limits(x = 32) +
+  theme(plot.margin=unit(c(0,0,0,0),"mm"))
+```
 
-empty
+I show the PCA plot. The brown dots represent control ducks, and the blue dots are infected ducks (as can be seen in the legend). PC1 explains 43% of the variation and PC2 explains 28% of the variation of the data. The control ducks cluster away from the infected ducks which is quite interesting. Infected week 4 ducks cluster away from infected week 12 ducks which is also interesting and can be further explored.
+```{r}
+PCA_plot_dA
+```
 
-# Ducks Week 12 DEA
+In the following sections, I will be showing you how to perform RNAseq analysis on the duck data which will be split by sampling time points (week 4 and week 12). This is important because you can view the differences between the duck samples by times and make conclusions on the data. 
 
-empty
+# Differentially Expression Analysis: Ducks Week 4
+
+Within this section, I will show you how to perform RNAseq analysis on the duck week 4 data and extract differentially expressed genes!
+
+First, create a subset of the duck week 4 data, and then I dropped the levels of "Treatment" column which will remove levels without samples.
+```{r}
+dds_dw4 <- dds[, dds$Time == "4"]
+dds_dw4$Treatment <- droplevels(dds_dw4$Treatment)
+```
+
+Next, conduct differential expression analysis by creating the model using `DESeq()` and get the results form the model using the `results()` function.
+```{r, message=F, warning=F}
+dds_dw4 <- DESeq(dds_dw4)
+dw4_res <- results(dds_dw4, contrast=c("Treatment", "Infected", "Control"))
+```
+
+View the top 5 rows in the dataset to see if the data is looking as expected. 
+```{r}
+head(dw4_res[order(dw4_res$pvalue), ], 5)
+```
+
+Next, I check how many genes are significantly expressed. There are 947 significant differentially expressed genes with p-values <0.05. Then, I observe the results using the `summary()` function. By setting the "alpha" parameter to 0.05, the significant genes with p-values <0.05 will be displayed. There are 606 significant up-regulated genes and 341 significant down-regulated genes.
+```{r}
+sum(dw4_res$padj < 0.05, na.rm=TRUE)
+summary(dw4_res, alpha = 0.05)
+```
+
+Visualing the results is important. In this case, I use an MA plot to see the distribution of significant genes. An MA plot plots the average normalized gene counts on the x-axis, and the log2 fold change on the y-axis. Fold change is a method that is used to explain quantity changes between 2 measurements and it is typically explained in a ratio. In this case, we are explaining the quantity changes of infected duck gene expression compared to control duck expression values. I expanded the limits on the y-axis to view which genes have high expressions. I added a title to the graph by using the "main" parameter. The "alpha" parameter was set to 0.05 and "colSig" parameter was set to "red". This means than genes with p-values <0.05 will be coloured red. 
+
+The are arrows on the top of the figure represent genes with log2FC values > 5, which are cut-off on the graph. There are 3 genes that have log2FC values < -4. Note that high gene expression refers to genes that have fold changes >2 or <-2. Genes that are between the range of absolute(log2FC > 2) don't show much changes in expression. Note that *absolute(log2FC > 2)* or *|log2FC > 2|* refers to: log2FC >2 and log2FC < -2. Overall, there is a lot of noise which is distracting. 
+```{r}
+plotMA(dw4_res, ylim = c(-4, 4), main ="Duck Gene Expression at Week 4", alpha = 0.05, colSig = "red")
+```
+
+DESeq2 has a great way to deal with the noise in the data by using a function called `lfcshrink()`. Prior to using the function, I saved the significant results with genes that had p-values < 0.05 and saved the new results in the variable `dw4_results`. Then, I used the function `lfcshrink()`. The log2 fold changes are shrunken down to eliminate noise.
+```{r, message=F, warning=F}
+dw4_results <- results(dds_dw4, contrast=c("Treatment", "Infected", "Control"), alpha = 0.05)
+dw4_res_shrinkage <- lfcShrink(dds_dw4, coef = resultsNames(dds_dw4)[2], res = dw4_results)
+```
+
+Because the noise was handled, this does change the number of significant differentially expressed genes (p-values <0.05). With the shrunken data, there are 966 significant DE genes (compared to the 947 genes before with no shrinkage). Additionally, there are 612 up-regulated DE genes and 354 down-regulated DE genes.
+```{r}
+sum(dw4_res_shrinkage$padj < 0.05, na.rm=TRUE)
+summary(dw4_res_shrinkage, alpha = 0.05)
+```
+
+The MA plot is much easier to read. Overall, there are more up-regulated genes than down-regulated genes in the ducks sampled at week 4. Additionally, there are only 3 highly down-regulated genes compared to the many highly up-regulated genes.
+```{r}
+plotMA(dw4_res_shrinkage, ylim = c(-4, 4), main = "Duck (Week 4) Gene Expression", colSig = "red")
+```
+
+Part of the exploratory data analysis, you can also plot the average count for any gene by using `plotCounts()` function. In this case, I show the plot for gene "ENSAPLG00000030332". As you can see, the control ducks have low expression for this gene. However, infected ducks have very high levels of expression for the gene. Additionally, I show the gene's adjusted p-value, which is incredibly small. This gene is the most significant gene in the duck week 4 dataset.
+```{r}
+plotCounts(dds_dw4, gene=which.min(dw4_res_shrinkage$padj), intgroup=c("Treatment", "Time"))
+dw4_res_shrinkage[which.min(dw4_res_shrinkage$padj),]
+```
+
+In this next section, I want to extract the differentially expressed genes which are ordered by the adjusted p-values. I must prepare the data. To begin, first add the row names as a column in the dataframe.
+```{r}
+dw4_res_shrinkage$gene_names <- rownames(dw4_res_shrinkage)
+head(dw4_res_shrinkage)
+```
+
+Then, I get the matching IDs of the genes which are only found in the duck week 4 samples. I extract those genes from the "genes" dataframe. The "genes" dataframe only contains 2 columns, the gene names as Ensembl IDs and the gene symbols. Then, I extract the gene symbols with the matching IDs and add those genes to the dataframe.
+```{r}
+matching_ids_dw4 <- which(genes$Gene %in% dw4_res_shrinkage$gene_names)
+head(genes, 5)
+dw4_res_shrinkage$Gene_Symbol <- genes$Symbol[matching_ids_dw4]
+head(dw4_res_shrinkage, 5)
+```
+
+Once I formatted the data how I need, I made sure that the dataframe was ordered based on the adjusted p-value and filtered out genes with adjusted p-values >0.05.
+```{r}
+all_sig_genes_dw4 <- dw4_res_shrinkage %>% 
+  data.frame() %>%  
+  group_by(padj) %>% 
+  slice_min(order_by=padj) %>% 
+  filter(padj<0.05)
+```
+
+You can save the dataframe using the function `write.csv()`. I will use this dataframe for gene ontology enrichment analysis so it is vital to save it!
+```{r}
+write.csv(as.data.frame(all_sig_genes_dw4), file="signDEgenes_DW4.csv")
+```
+
+I view the details on the dataframes to make sure that I have the correct number of genes. The dataframe looks like it should!
+```{r}
+summary(dw4_res_shrinkage)
+dim(all_sig_genes_dw4)
+head(all_sig_genes_dw4)
+```
+
+With the modified dataframe, I can extract the significantly DE up-regulated and down-regulated genes into separate dataframes or just save all of the significantly DE genes in 1 dataframe. Note that I consider genes with log2FC >2 and <-2 as significantly DE up- and down-regulated genes.
+```{r}
+dw4_up_regulated <- all_sig_genes_dw4[all_sig_genes_dw4$log2FoldChange>2,]
+dw4_down_regulated <- all_sig_genes_dw4[all_sig_genes_dw4$log2FoldChange<(-2),]
+all_dw4_filtered <- all_sig_genes_dw4[abs(all_sig_genes_dw4$log2FoldChange)>2,]
+```
+
+# Differentially Expression Analysis: Ducks Week 12
+
+The code below is the same as for the week 4 ducks. To prevent or reduce the repetitive code, I highly recommend creating functions.
+
+To begin, I created a subset for the week 12 ducks. Then, I dropped the levels of samples. I created the models using `DESeq()` and acquired the results using `results()`. 
+```{r, message=F, warning=F}
+dds_dw12 <- dds[, dds$Time == "12"]
+dds_dw12$Treatment <- droplevels(dds_dw12$Treatment)
+dds_dw12 <- DESeq(dds_dw12)
+res_dw12 <- results(dds_dw12, contrast=c("Treatment", "Infected", "Control"))
+```
+
+Once again, I look at the summary and the details of the results. There are 130 up-regulated DE genes and 42 down-regulated DE genes. There are only 172 significant DE genes compared to the week 4 ducks.
+```{r}
+head(res_dw12[order(res_dw12$pvalue), ])
+summary(res_dw12, alpha = 0.05)
+sum(res_dw12$padj < 0.05, na.rm=TRUE)
+```
+
+The MA plot shows much fewer DE genes in week 12 ducks which is quite interesting. However, the noise needs to be reduced.
+```{r}
+plotMA(res_dw12, ylim = c(-2, 4), main = "Duck Gene Expression at Week 12", alpha = 0.05, colSig = "red")
+```
+
+The noise is reduced using the `lfcshrink()` function. The MA plot still shows a decreased level of gene expression in week 12 ducks.
+```{r}
+dw12_results <- results(dds_dw12, contrast=c("Treatment", "Infected", "Control"), alpha = 0.05)
+dw12_res_shrinkage <- lfcShrink(dds_dw12, coef = resultsNames(dds_dw12)[2], res = dw12_results)
+plotMA(dw12_res_shrinkage, ylim = c(-2, 4), main = "Duck (Week 12) Gene Expression", colSig = "red")
+```
+
+Next, I extract the DE genes which are sorted by adjusted p-values.
+```{r}
+dw12_res_shrinkage$gene_names <- rownames(dw12_res_shrinkage)
+matching_ids_dw12 <- which(genes$Gene %in% dw12_res_shrinkage$gene_names)
+dw12_res_shrinkage$Gene_Symbol <- genes$Symbol[matching_ids_dw12]
+all_sig_genes_dw12 <- dw12_res_shrinkage %>% 
+  data.frame() %>%  
+  group_by(padj) %>% 
+  slice_min(order_by=padj) %>% 
+  filter(padj<0.05)
+```
+
+Save the dataframe for further analysis in the future!
+```{r}
+write.csv(as.data.frame(all_sig_genes_dw12), file="signDEgenes_DW12.csv")
+```
+
+I check the dataframes to validate that the data is correctly formatted.
+```{r}
+summary(dw12_res_shrinkage)
+dim(all_sig_genes_dw12)
+head(all_sig_genes_dw12)
+```
+
+I extract all of the significant DE genes.
+```{r}
+all_dw12_filtered <- all_sig_genes_dw12[abs(all_sig_genes_dw12$log2FoldChange)>2,]
+```
 
 # Next Steps
 
-empty
+This concludes the end of this tutorial! The next steps involve conducting gene ontology (GO) enrichment analysis to discover what the differentially expressed genes do and what their roles might be. The second tutorial will be teaching how to use Goseq, an R library, for GO enrichment analysis. Additionally, the CSV files containing the significantly DE genes will be used in the second tutorial. 
 
-# References
-
-empty
+For more information on `DESeq2`, please refer to the vignette (http://www.bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html) and the scientific article (https://genomebiology.biomedcentral.com/articles/10.1186/s13059-014-0550-8).
