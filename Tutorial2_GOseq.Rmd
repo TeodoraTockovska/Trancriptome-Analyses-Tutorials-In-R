@@ -86,7 +86,7 @@ Within this section, I used 2 documents as resources:
 
 I use Biomart to create the database for the genes because the duck genome is a non-native organism. This means that the GOseq database does not contain the duck genome. I installed the duck genome from Ensembl which will be used to create the database.
 
-To begin, I used the biomart functions to select for the specific terms that I want to extract from the biomart database. First, within the funciton `useMart()`, the "biomart" argument is set to "ENSEMBL_MART_ENSEMBL" for the genes. I used the function `listMarts()` from the biomart library to select it and create a dataset. I set the host to the main website. The set-up for the duck Biomart database is crucial for conducting the GOSeq analysis for the data.
+To begin, I used the biomart functions to select for the specific terms that I want to extract from the biomart database. First, within the funciton `useMart()`, the "biomart" argument is set to "ENSEMBL_MART_ENSEMBL" for the genes. I used the function `listMarts()` from the `Biomart` library to select it and create a dataset. I set the host to the main website. The set-up for the duck Biomart database is crucial for conducting the GOSeq analysis for the data.
 ```{r, message=F, warning=F}
 mart <- useMart(biomart="ENSEMBL_MART_ENSEMBL", host="www.ensembl.org")
 datasets <- listDatasets(mart)
@@ -176,4 +176,13 @@ write_csv(GOmap_dw12, "GOmap_dw12.csv")
 
 ## Next Steps
 
-The proceeding steps is to explore the data, and figure out what the important GO terms are within the data. The goal of the final tutorial is to show you different methods to do this. Because the sample data did not have any significant GO terms, I cannot show you results, however, I will show you the typical things that you can explore. 
+Once you have discovered DE genes and their GO terms, you can explore the data further by performing exploratory data analysis. Unfortunately, the sample data does not have any significant GO terms. But if you have any data with significant GO terms, you can ask some questions such as "How many GO terms are within the cellular component category?" or "What are the top 20 significant GO terms?". 
+
+Many questions can be asked from the data and you can try to answer those questions by creating tables with resulting information or creating visualizations/plots. Most of the time, plots capture the information very well and conclusions can be made. I recommend generating a list of questions that you would like to ask first. The down-stream analyses will prompt you to critically think about the results and generate more questions. 
+
+Please note that once you have data, you need to first make sure that it is in a format you can work with, and that there are no NA (null) values. Remove any values within the data that are empty. If the data is in incorrect format, you should adjust that to whatever suits your needs. Clean your data prior to any analysis.
+
+Finally, it's important to refer to literature in the field to get inspiration on what types of analyses and graphs can be done. For example, view the paper by Liu et al. (2018, https://pubmed.ncbi.nlm.nih.gov/29601508/). The analyses that Liu et al. (2018) conducted are very similar to what I have shown you. When reading the paper, you can try to understand their methods. Take a look at the figures and understand what the figures are showing (axes, titles, relevant information), then try to replicate them. For example, their figures can be replicated by using the `ggplot2` library and using a Venn diagram library to generate figures. 
+
+**Citation for Liu et al. (2018)**: 
+Liu W, Qiu X, Song C, Sun Y, Meng C, Liao Y, Tan L, Ding Z, Liu X, Ding C. Deep Sequencing-Based Transcriptome Profiling Reveals Avian Interferon-Stimulated Genes and Provides Comprehensive Insight into Newcastle Disease Virus-Induced Host Responses. Viruses. 2018 Mar 30;10(4):162. doi: 10.3390/v10040162. PMID: 29601508; PMCID: PMC5923456. https://pubmed.ncbi.nlm.nih.gov/29601508/
